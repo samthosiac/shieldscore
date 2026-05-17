@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# Build outputs
+dist/
+build/
+
+# Compact compiler outputs
+contracts/*.zkir
+contracts/*.artifact
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

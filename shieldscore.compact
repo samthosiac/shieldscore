@@ -1,0 +1,76 @@
+// ShieldScore - Privacy-preserving credit eligibility contract
+// Built on Midnight Network for the Midnight Hackathon 2026
+
+pragma language_version >= 0.14.0;
+
+import CompactStandardLibrary;
+
+// Eligibility tiers
+// 0 = INELIGIBLE, 1 = REVIEW, 2 = ELIGIBLE
+
+// Public ledger state - only stores proof results, never raw data
+export ledger {
+  // Maps a commitment (hash of user data) to an eligibility result
+  eligibility_results: Map<Bytes<32>, Uint<8>>;
+  total_checks: Counter;
+}
+
+// Witness: private inputs provided by the user (never go on-chain)
+witness user_financial_data(): {
+  income_tier: Uint<8>;       // 0=low, 1=medium, 2=high (bucketed, not exact)
+  debt_ratio_tier: Uint<8>;   // 0=low, 1=medium, 2=high
+  asset_tier: Uint<8>;        // 0=low, 1=medium, 2=high
+  ai_score: Uint<8>;          // 0-100, computed locally by AI model
+};
+
+// Circuit: computes eligibility from private inputs
+// Returns 0=INELIGIBLE, 1=REVIEW, 2=ELIGIBLE
+circuit compute_eligibility(
+  income_tier: Uint<8>,
+  debt_ratio_tier: Uint<8>,
+  asset_tier: Uint<8>,
+  ai_score: Uint<8>
+): Uint<8> {
+  // Basic eligibility rules computed in ZK
+  // High debt + low income = ineligible
+  if debt_ratio_tier == 2 && income_tier == 0 {
+    return 0;
+  }
+  // AI score below 40 = ineligible
+  if ai_score < 40 {
+    return 0;
+  }
+  // AI score above 70 + not high debt = eligible
+  if ai_score > 70 && debt_ratio_tier < 2 {
+    return 2;
+  }
+  // Everything else = review
+  return 1;
+}
+
+// Export: submit eligibility proof on-chain
+export circuit submit_eligibility_check(
+  commitment: Bytes<32>   // public: hash of user's data (no raw data)
+): [] {
+  // Read private witness data (stays off-chain)
+  const data = user_financial_data();
+
+  // Compute result in ZK
+  const result = compute_eligibility(
+    data.income_tier,
+    data.debt_ratio_tier,
+    data.asset_tier,
+    data.ai_score
+  );
+
+  // Store only the result on-chain — raw data never touches the ledger
+  eligibility_results.insert(commitment, result);
+  total_checks.increment(1);
+}
+
+// Export: anyone can read a result by commitment
+export circuit get_eligibility(
+  commitment: Bytes<32>
+): Uint<8> {
+  return eligibility_results.lookup(commitment);
+}
